@@ -13,7 +13,7 @@ import cv2
 import os
 
 
-model = YOLO('./don`t_freeze_whitecane.pt')
+model = YOLO('./freeze_whitecane.pt')
 
 def generate_frames(video_path, outpu_path):
     cap = cv2.VideoCapture(video_path)
@@ -23,12 +23,16 @@ def generate_frames(video_path, outpu_path):
     width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
     height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
     out = cv2.VideoWriter(outpu_path, fourcc, fps, (width, height))
-
+    
+    if not cap.isOpened():
+      return redirect(url_for('upload_video'))
+    
     while cap.isOpened():
         ret, frame = cap.read()
 
         if not ret:
-            break
+            return redirect(url_for('upload_video'))
+            
 
         results = model(frame)
 
@@ -42,10 +46,11 @@ def generate_frames(video_path, outpu_path):
             frame = buffer.tobytes()            
 
             yield (b'--frame\r\n'
-                   b'Content-Type: image/jpeg\r\n\r\n'+frame+b'\r\n')
+                    b'Content-Type: image/jpeg\r\n\r\n'+frame+b'\r\n')
     cap.release()
     out.release()
     cv2.destroyAllWindows()
+    return redirect(url_for('upload_video'))
 
 
 @app.route('/annotated_video/', methods=['POST'])
@@ -64,7 +69,8 @@ def annotated_video():
 
     output_path = os.path.join('video',f'output_{video_name}')
     #영상 끝나고 나서 다시 upload_video.html으로 돌아가게 구현 필요
-    return Response(generate_frames(video_path, output_path), mimetype='multipart/x-mixed-replace; boundary=frame')
+    return Response(generate_frames(video_path, output_path), mimetype='multipart/x-mixed-replace; boundary=frame',
+                    )
 
 
 
