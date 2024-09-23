@@ -7,7 +7,35 @@
 </head>
 <body>
     <h1>fine-tuning</h1>
-    <img src="{{url_for('annotated_video')}}" width="640" height="480">
+    <img id="video-stream" src="{{url_for('annotated_video')}}" width="640" height="480">
+    
+    <script>
+        const videoStream = document.getElementById('video-stream');
 
-</body>
+        // 주기적으로 이미지를 갱신하는 함수
+        function updateStream() {
+            const xhr = new XMLHttpRequest();
+            xhr.open('GET', "{{ url_for('annotated_video') }}", true);
+            xhr.responseType = 'blob';
+
+            xhr.onload = function () {
+                if (xhr.status === 200) {
+                    const blob = xhr.response;
+
+                    if (blob.size === 0) {
+                        // 영상 끝났음을 알림
+                        window.location.href = "{{ url_for('upload_video') }}";
+                    } else {
+                        const url = URL.createObjectURL(blob);
+                        videoStream.src = url;
+                    }
+                }
+            };
+
+            xhr.send();
+        }
+
+        // 일정 간격으로 이미지 갱신
+        setInterval(updateStream, 500);  // 500ms마다 이미지 갱신
+    </script>
 </html>
