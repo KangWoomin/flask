@@ -10,23 +10,6 @@
         <input type="file" name="video" accept="video/*">
         <button type="submit">Upload Video</button>
     </form>
-    <div id="video-stream"></div>
-
-    <script>
-        const videoStream = document.getElementById('video-stream');
-
-        const eventSource = new EventSource("{{url_for('annotated_video')}}");
-
-        eventSource.onmessage = function(event){
-            if (event.data == 'END'){
-                window.location.href = "{{url_for('upload_video')}}";
-            }else{
-                const img = new Image();
-                img.src = 'data:images/jpeg;base64,'+event.data;
-                videoStream.appendChild(img);
-            }
-        };
-    </script>
-</body>
+    
 </body>
 </html>

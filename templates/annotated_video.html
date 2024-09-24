@@ -1,41 +1,34 @@
-<!-- templates/annotated_video.html -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Yolov8n Annotated Video</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Annotated Video Stream</title>
 </head>
 <body>
-    <h1>fine-tuning</h1>
-    <img id="video-stream" src="{{url_for('annotated_video')}}" width="640" height="480">
-    
+    <h1>Processing Video Stream</h1>
+    <img id="video-stream" src="{{ url_for('annotated_video') }}" alt="Video stream not available">
+
     <script>
-        const videoStream = document.getElementById('video-stream');
+        const videoElement = document.getElementById('video-stream');
+        const eventSource = new EventSource('/annotated_video');
 
-        // 주기적으로 이미지를 갱신하는 함수
-        function updateStream() {
-            const xhr = new XMLHttpRequest();
-            xhr.open('GET', "{{ url_for('annotated_video') }}", true);
-            xhr.responseType = 'blob';
-
-            xhr.onload = function () {
-                if (xhr.status === 200) {
-                    const blob = xhr.response;
-
-                    if (blob.size === 0) {
-                        // 영상 끝났음을 알림
-                        window.location.href = "{{ url_for('upload_video') }}";
-                    } else {
-                        const url = URL.createObjectURL(blob);
-                        videoStream.src = url;
-                    }
-                }
-            };
-
-            xhr.send();
+        eventSource.onmessage = function(event){
+            if(event.data === 'END'){
+                window.location.href='/';
+            }
+        };
+        videoElement.onended = function(){
+            window.location.href = '/';
         }
 
-        // 일정 간격으로 이미지 갱신
-        setInterval(updateStream, 500);  // 500ms마다 이미지 갱신
+        videoElement.onload = function(){
+            setTimeout(() => {
+                videoElement.src = "{{url_for('annotated_video')}}?"+new Date().getTime();},100);
+            };
+        
+
     </script>
+   
+</body>
 </html>
