@@ -31,79 +31,94 @@ def get_db_connection():
 from ultralytics import YOLO
 import cv2
 import os
-
+import time
 
 model = YOLO('./freeze_whitecane.pt')
 
-def generate_frames(video_path, outpu_path):
-    cap = cv2.VideoCapture(video_path)
-
-    fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-    fps = int(cap.get(cv2.CAP_PROP_FPS))
-    width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-    height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-    out = cv2.VideoWriter(outpu_path, fourcc, fps, (width, height))
+def generate_frames(video_list, output_list):
     
-    if not cap.isOpened():
-        return 
-    
-    while cap.isOpened():
-        ret, frame = cap.read()
+    for idx, video_path in enumerate(video_list):
+        cap = cv2.VideoCapture(video_path)
+        output_path = output_list[idx]
 
-        if not ret:
-            break
+        fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+        fps = int(cap.get(cv2.CAP_PROP_FPS))
+        width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+        height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        out = cv2.VideoWriter(output_path, fourcc, fps, (width, height))
 
-        results = model(frame)
+        if not cap.isOpened():
+            print(f'비디오 리스트 오류:{video_path}')
+        
+        while cap.isOpened():
+            ret , frame = cap.read()
 
-        if results:
-            result = results[0]
-            annotated_frame = result.plot()
-            out.write(annotated_frame)
+            if not ret:
+                print('스트리밍 종료')
+                time.sleep(2)     
+                yield (b'--frame\r\n'
+                       b'Content-Type : text/plain\r\n\r\n'+b'END\r\n')
+                break
 
-            ret, buffer = cv2.imencode('.jpg', annotated_frame)
-            frame = buffer.tobytes()            
+            results = model(frame)
 
-            yield (b'--frame\r\n'
-                   b'Content-Type: image/jpeg\r\n\r\n'+frame+b'\r\n')
+            if results:
+                result = results[0]
+                annotated_frame = result.plot()
+                out.write(annotated_frame)
 
-    cap.release()
-    out.release()
-    cv2.destroyAllWindows()
+                ret, buffer = cv2.imencode('.jpg', annotated_frame)
+                frame = buffer.tobytes()
 
-    # 영상 끝날 때 종료 신호 전송
+                yield (b'--frame\r\n'
+                       b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n')
+        cap.release()
+        out.release()
+
+    print('스트리밍 완료')
     yield (b'--frame\r\n'
-           b'Content-Type: text/plain\r\n\r\nEND\r\n')
+        b'Content-Type: text/html\r\n\r\n'
+        b'<html><body><h1>streaming done</h1>\r\n'
+        b'<script>\r\n'
+        b'setTimeout(function(){window.location.href="/";}, 2000);'  # 2초 후 리다이렉트
+        b'</script>\r\n'
+        b'</body></html>\r\n')
+
 
 
 from datetime import datetime
+import glob
+
+
 @app.route('/annotated_video/', methods=['POST'])
 def annotated_video():
-
-    if 'video' not in request.files:
-        return redirect(url_for('upload_video'))
     
-    video_file = request.files['video']
-    if video_file.filename =='':
-        return redirect(url_for('upload_video'))
+    video_list = glob.glob('video/test/*.mp4')
+    output_list = []
+
+    for video_path in video_list:
+        video_name = os.path.basename(video_path)
+        timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+        output_path = os.path.join('video/annotated_video', f'output_{video_name}_{timestamp}.mp4')
+        output_list.append(output_path)
+
+        conn = get_db_connection()
+        conn.execute("""INSERT INTO videos (original_video_path, annotated_video_path)
+                            VALUES (?,?)""", (video_path, output_path))
+        conn.commit()
+        conn.close()
+
+    # stream_videos(video_list,output_list)
+    return Response(generate_frames(video_list, output_list), mimetype='multipart/x-mixed-replace; boundary=frame')
     
-    video_name = video_file.filename
-    video_path = os.path.join('video', video_name)
-    video_file.save(video_path)
-
-    output_path = os.path.join('video/annotated_video',f'output_{video_name}_{datetime.now()}')
-
-    conn = get_db_connection()
-    conn.execute("INSERT INTO videos (original_video_path, annotated_video_path) VALUES(?,?)",
-                 (video_path, output_path))
-    conn.commit()
-    conn.close()
-    
-    return Response(generate_frames(video_path, output_path), mimetype='multipart/x-mixed-replace; boundary=frame')
 
 
+def stream_videos(video_list, output_list):
+    return Response(generate_frames(video_list, output_list), mimetype='multipart/x-mixed-replace; boundary=frame')
 
-
-
+@app.route('/annotated_video_done')
+def annotated_video_done():
+    return redirect(url_for('upload_video'))
 
 if __name__ == "__main__":
     app.run(host='0.0.0.0', port=5000)
