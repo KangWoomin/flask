@@ -7,14 +7,14 @@
 </head>
 <body>
     <h1>Processing Video Stream</h1>
-    <img id="video-stream" src="{{ url_for('annotated_video') }}" alt="Video stream not available">
+    <img id="video-stream" width="640" height="480" src="{{ url_for('annotated_video') }}" alt="Video stream not available">
 
     <script>
         const videoElement = document.getElementById('video-stream');
         const eventSource = new EventSource('/annotated_video');
 
         eventSource.onmessage = function(event){
-            if(event.data === 'END'){
+            if(event.data.includes('streaming done')){
                 window.location.href='/';
             }
         };
@@ -24,7 +24,7 @@
 
         videoElement.onload = function(){
             setTimeout(() => {
-                videoElement.src = "{{url_for('annotated_video')}}?"+new Date().getTime();},100);
+                videoElement.src = "{{url_for('annotated_video')}}?"+new Date().getTime();});
             };
         
 

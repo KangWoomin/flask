@@ -55,9 +55,14 @@ def generate_frames(video_list, output_list):
 
             if not ret:
                 print('스트리밍 종료')
+                conn = get_db_connection()
+                conn.execute("""INSERT INTO videos (original_video_path, annotated_video_path)
+                                    VALUES (?,?)""", (video_path, output_path))
+                conn.commit()
+                conn.close()
                 time.sleep(2)     
-                yield (b'--frame\r\n'
-                       b'Content-Type : text/plain\r\n\r\n'+b'END\r\n')
+                # yield (b'--frame\r\n'
+                #        b'Content-Type : text/plain\r\n\r\n'+b'END\r\n')
                 break
 
             results = model(frame)
@@ -96,17 +101,19 @@ def annotated_video():
     video_list = glob.glob('video/test/*.mp4')
     output_list = []
 
+    os.makedirs('video/annotated_video', exist_ok=True)
+
     for video_path in video_list:
         video_name = os.path.basename(video_path)
         timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
         output_path = os.path.join('video/annotated_video', f'output_{video_name}_{timestamp}.mp4')
         output_list.append(output_path)
 
-        conn = get_db_connection()
-        conn.execute("""INSERT INTO videos (original_video_path, annotated_video_path)
-                            VALUES (?,?)""", (video_path, output_path))
-        conn.commit()
-        conn.close()
+        # conn = get_db_connection()
+        # conn.execute("""INSERT INTO videos (original_video_path, annotated_video_path)
+        #                     VALUES (?,?)""", (video_path, output_path))
+        # conn.commit()
+        # conn.close()
 
     # stream_videos(video_list,output_list)
     return Response(generate_frames(video_list, output_list), mimetype='multipart/x-mixed-replace; boundary=frame')
@@ -121,4 +128,4 @@ def annotated_video_done():
     return redirect(url_for('upload_video'))
 
 if __name__ == "__main__":
-    app.run(host='0.0.0.0', port=5000)
+    app.run(host='0.0.0.0', port=5000 , debug=True)
